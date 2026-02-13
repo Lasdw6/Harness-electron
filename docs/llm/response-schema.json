@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harnessgg.dev/schemas/electron/response-schema.json",
+  "title": "Harness Electron Response",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["ok", "protocolVersion", "command", "session", "data"],
+      "properties": {
+        "ok": { "const": true },
+        "protocolVersion": { "const": "1.0" },
+        "command": { "type": "string" },
+        "session": { "type": "string" },
+        "data": {},
+        "meta": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["ok", "protocolVersion", "command", "session", "error"],
+      "properties": {
+        "ok": { "const": false },
+        "protocolVersion": { "const": "1.0" },
+        "command": { "type": "string" },
+        "session": { "type": "string" },
+        "error": {
+          "type": "object",
+          "required": ["code", "message", "retryable", "suggestedNext"],
+          "properties": {
+            "code": {
+              "type": "string",
+              "enum": [
+                "INVALID_INPUT",
+                "CONNECT_FAILED",
+                "TARGET_NOT_FOUND",
+                "INVALID_SELECTOR",
+                "ACTION_FAILED",
+                "TIMEOUT",
+                "ASSERT_FAIL",
+                "INTERNAL_ERROR"
+              ]
+            },
+            "message": { "type": "string" },
+            "retryable": { "type": "boolean" },
+            "suggestedNext": { "type": "array", "items": { "type": "string" } },
+            "details": { "type": "object", "additionalProperties": true }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  ]
+}

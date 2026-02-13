@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "protocolVersion": "1.0",
+  "command": "capabilities",
+  "session": "default",
+  "data": {
+    "protocolVersion": "1.0",
+    "package": "@harnessgg/electron",
+    "commands": [
+      "connect",
+      "dom",
+      "type",
+      "click",
+      "wait",
+      "screenshot",
+      "evaluate",
+      "assert",
+      "disconnect",
+      "sessions list",
+      "sessions prune",
+      "capabilities"
+    ],
+    "selectors": ["css", "xpath", "text", "role", "testid"],
+    "assertions": ["exists", "visible", "text", "url"],
+    "defaults": {
+      "timeoutMs": 5000,
+      "sessionPath": ".harness-electron/sessions"
+    }
+  }
+}

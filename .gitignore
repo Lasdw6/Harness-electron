@@ -1,0 +1,6 @@
+.electron/
+node_modules/
+dist/
+.harness-electron/
+coverage/
+*.log
