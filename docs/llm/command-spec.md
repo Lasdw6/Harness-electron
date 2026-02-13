@@ -5,6 +5,7 @@
 1. Commands emit one JSON object to stdout.
 2. Exit code `0` means success, non-zero means failure.
 3. Use `--session` to reuse connection metadata across one-shot commands.
+4. Target Electron app must expose a CDP port (for example `--remote-debugging-port=9222`) before `connect`.
 
 ## Command grammar
 
@@ -79,3 +80,7 @@ Exactly one selector flag must be set unless command kind/mode explicitly does n
 3. `--text <text>`
 4. `--role <aria_role> [--name <accessible_name>]`
 5. `--testid <test_id>`
+
+Notes:
+1. Multi-word values are supported (for example `--text "Add Project"` and `--name "Add Project"`).
+2. If your runner splits args, pass quoted values for selectors and free-text flags.

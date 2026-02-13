@@ -4,12 +4,12 @@ import { HarnessCliError } from "./errors.js";
 
 export function addSelectorOptions(command: Command): Command {
   return command
-    .option("--css <selector>", "CSS selector")
-    .option("--xpath <selector>", "XPath selector")
-    .option("--text <text>", "Text selector")
-    .option("--role <role>", "ARIA role selector")
-    .option("--testid <id>", "Test id selector")
-    .option("--name <name>", "Optional role name filter");
+    .option("--css <selector...>", "CSS selector")
+    .option("--xpath <selector...>", "XPath selector")
+    .option("--text <text...>", "Text selector")
+    .option("--role <role...>", "ARIA role selector")
+    .option("--testid <id...>", "Test id selector")
+    .option("--name <name...>", "Optional role name filter");
 }
 
 export function selectorFromOptions(options: Record<string, unknown>): SelectorInput {
@@ -46,5 +46,15 @@ export function selectorFromOptionsOptional(options: Record<string, unknown>): S
 }
 
 function asString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    const parts = value.filter((part) => typeof part === "string") as string[];
+    if (parts.length === 0) {
+      return undefined;
+    }
+    return parts.join(" ");
+  }
+  return undefined;
 }

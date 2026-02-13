@@ -2,6 +2,16 @@
 
 Use exact command sequence below for a login flow.
 
+## 0) Start Electron with remote debugging
+
+The harness connects over Chrome DevTools Protocol (CDP). Start the app with:
+
+```bash
+electron . --remote-debugging-port=9222
+```
+
+If your app already launches Electron internally, ensure a CDP port is enabled before running harness commands.
+
 ## 1) Connect
 
 ```bash

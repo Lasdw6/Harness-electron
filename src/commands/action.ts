@@ -107,7 +107,7 @@ export async function screenshotCommand(store: SessionStore, options: Screenshot
       await safeElementScreenshot(locator, options.path, options.timeout);
       return { path: options.path, scope: "element" };
     }
-    await safeScreenshot(page, options.path, options.fullPage);
+    await safeScreenshot(page, options.path, options.fullPage, options.timeout);
     return { path: options.path, scope: options.fullPage ? "full-page" : "viewport" };
   });
 }

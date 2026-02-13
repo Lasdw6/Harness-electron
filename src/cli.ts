@@ -28,8 +28,8 @@ program
   .requiredOption("--port <number>", "CDP port")
   .option("--host <host>", "CDP host", "127.0.0.1")
   .option("--session <id>", "session id", "default")
-  .option("--window-title <title>", "window title contains filter")
-  .option("--url-contains <text>", "URL contains filter")
+  .option("--window-title <title...>", "window title contains filter")
+  .option("--url-contains <text...>", "URL contains filter")
   .action(async (options) => {
     await run("connect", options.session, async () => {
       const port = parsePositiveInt(options.port, "port");
@@ -37,8 +37,8 @@ program
         host: options.host,
         port,
         session: options.session,
-        windowTitle: options.windowTitle,
-        urlContains: options.urlContains
+        windowTitle: options.windowTitle ? parseStringValue(options.windowTitle, "window-title") : undefined,
+        urlContains: options.urlContains ? parseStringValue(options.urlContains, "url-contains") : undefined
       });
     });
   });
@@ -65,7 +65,7 @@ program
 const typeCmd = addSelectorOptions(
   program
     .command("type")
-    .requiredOption("--value <text>", "text to type")
+    .requiredOption("--value <text...>", "text to type")
     .option("--session <id>", "session id", "default")
     .option("--timeout <ms>", "timeout in milliseconds", "5000")
     .option("--clear", "clear before typing", false)
@@ -75,7 +75,7 @@ typeCmd.action(async (options) => {
     return typeCommand(store, {
       session: options.session,
       selector: selectorFromOptions(options),
-      text: options.value,
+      text: parseStringValue(options.value, "value"),
       clear: options.clear,
       timeout: parsePositiveInt(options.timeout, "timeout")
     });
@@ -100,7 +100,7 @@ const waitCmd = addSelectorOptions(
     .command("wait")
     .option("--session <id>", "session id", "default")
     .requiredOption("--for <mode>", "visible|hidden|url|text")
-    .option("--value <value>", "wait value for url/text")
+    .option("--value <value...>", "wait value for url/text")
     .option("--timeout <ms>", "timeout in milliseconds", "5000")
 );
 waitCmd.action(async (options) => {
@@ -113,7 +113,7 @@ waitCmd.action(async (options) => {
       session: options.session,
       mode,
       selector: mode === "url" ? undefined : selectorFromOptions(options),
-      value: options.value,
+      value: options.value ? parseStringValue(options.value, "value") : undefined,
       timeout: parsePositiveInt(options.timeout, "timeout")
     });
   });
@@ -147,12 +147,12 @@ screenshotCmd.action(async (options) => {
 program
   .command("evaluate")
   .option("--session <id>", "session id", "default")
-  .requiredOption("--script <script>", "expression to evaluate")
+  .requiredOption("--script <script...>", "expression to evaluate")
   .action(async (options) => {
     await run("evaluate", options.session, async () => {
       return evaluateCommand(store, {
         session: options.session,
-        script: options.script
+        script: parseStringValue(options.script, "script")
       });
     });
   });
@@ -162,7 +162,7 @@ const assertCmd = addSelectorOptions(
     .command("assert")
     .option("--session <id>", "session id", "default")
     .requiredOption("--kind <kind>", "exists|visible|text|url")
-    .option("--expected <value>", "expected value for text/url")
+    .option("--expected <value...>", "expected value for text/url")
     .option("--timeout <ms>", "timeout in milliseconds", "5000")
 );
 assertCmd.action(async (options) => {
@@ -175,7 +175,7 @@ assertCmd.action(async (options) => {
       session: options.session,
       kind: parsedKind.data,
       selector: parsedKind.data === "url" ? undefined : selectorFromOptions(options),
-      expected: options.expected,
+      expected: options.expected ? parseStringValue(options.expected, "expected") : undefined,
       timeout: parsePositiveInt(options.timeout, "timeout")
     });
   });
@@ -233,6 +233,20 @@ function parsePositiveInt(value: string | number, field: string): number {
     throw new HarnessCliError("INVALID_INPUT", `${field} must be a positive integer`, false);
   }
   return parsed;
+}
+
+function parseStringValue(value: unknown, field: string): string {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    const parts = value.filter((part) => typeof part === "string") as string[];
+    const joined = parts.join(" ").trim();
+    if (joined) {
+      return joined;
+    }
+  }
+  throw new HarnessCliError("INVALID_INPUT", `${field} is required`, false);
 }
 
 function normalizeTimeoutError(error: unknown): unknown {

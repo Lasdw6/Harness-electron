@@ -14,4 +14,9 @@ describe("selectorFromOptions", () => {
   it("throws when multiple are defined", () => {
     expect(() => selectorFromOptions({ css: "#app", text: "Login" })).toThrowError(/at most one/i);
   });
+
+  it("joins variadic selector values into one string", () => {
+    const selector = selectorFromOptions({ text: ["Add", "Project"] });
+    expect(selector.text).toBe("Add Project");
+  });
 });

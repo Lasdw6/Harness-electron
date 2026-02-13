@@ -114,9 +114,14 @@ export async function domHtml(page: Page, maxChars = 30000): Promise<string> {
   return html.slice(0, maxChars);
 }
 
-export async function safeScreenshot(page: Page, screenshotPath: string, fullPage = false): Promise<void> {
+export async function safeScreenshot(
+  page: Page,
+  screenshotPath: string,
+  fullPage = false,
+  timeout = 30000
+): Promise<void> {
   await fs.ensureDir(path.dirname(screenshotPath));
-  await page.screenshot({ path: screenshotPath, fullPage });
+  await page.screenshot({ path: screenshotPath, fullPage, timeout });
 }
 
 export async function safeElementScreenshot(

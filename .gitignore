@@ -4,3 +4,4 @@ dist/
 .harness-electron/
 coverage/
 *.log
+TODO.md
