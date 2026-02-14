@@ -1,13 +1,15 @@
 import type { SelectorInput, AssertKind } from "../contracts/types.js";
 import type { SessionStore } from "../session/store.js";
-import { selectorToLocator } from "../runtime/playwright.js";
 import { HarnessCliError } from "../errors.js";
-import { withPage } from "./shared.js";
+import { resolveLocatorTarget, withPage } from "./shared.js";
 
 type AssertOptions = {
   session: string;
   kind: AssertKind;
   selector?: SelectorInput;
+  elementId?: string;
+  index: number;
+  strictSingle: boolean;
   expected?: string;
   timeout: number;
 };
@@ -30,17 +32,40 @@ export async function assertCommand(store: SessionStore, options: AssertOptions)
       return { asserted: true, kind: options.kind };
     }
 
-    if (!options.selector) {
-      throw new HarnessCliError("INVALID_SELECTOR", "A selector is required for this assert kind", false);
-    }
-    const locator = selectorToLocator(page, options.selector).first();
+    const resolved = await resolveLocatorTarget({
+      store,
+      sessionId: options.session,
+      page,
+      selector: options.selector,
+      elementId: options.elementId,
+      index: options.index,
+      strictSingle: options.strictSingle,
+      timeout: options.timeout
+    });
+    const locator = resolved.locator;
     if (options.kind === "exists") {
       await locator.waitFor({ state: "attached", timeout: options.timeout });
-      return { asserted: true, kind: options.kind };
+      return {
+        asserted: true,
+        kind: options.kind,
+        target: {
+          strategy: resolved.strategy,
+          index: resolved.index,
+          ...(resolved.matchCount !== undefined ? { matchCount: resolved.matchCount } : {})
+        }
+      };
     }
     if (options.kind === "visible") {
       await locator.waitFor({ state: "visible", timeout: options.timeout });
-      return { asserted: true, kind: options.kind };
+      return {
+        asserted: true,
+        kind: options.kind,
+        target: {
+          strategy: resolved.strategy,
+          index: resolved.index,
+          ...(resolved.matchCount !== undefined ? { matchCount: resolved.matchCount } : {})
+        }
+      };
     }
     if (!options.expected) {
       throw new HarnessCliError("INVALID_INPUT", "--expected is required for --kind text", false);
@@ -50,7 +75,15 @@ export async function assertCommand(store: SessionStore, options: AssertOptions)
     while (Date.now() < deadline) {
       const text = await locator.textContent();
       if ((text ?? "").includes(options.expected)) {
-        return { asserted: true, kind: options.kind };
+        return {
+          asserted: true,
+          kind: options.kind,
+          target: {
+            strategy: resolved.strategy,
+            index: resolved.index,
+            ...(resolved.matchCount !== undefined ? { matchCount: resolved.matchCount } : {})
+          }
+        };
       }
       await page.waitForTimeout(100);
     }

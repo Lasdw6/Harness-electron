@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "fs-extra";
-import { sessionRecordSchema, type SessionRecord } from "../contracts/types.js";
+import { sessionRecordSchema, type ElementReference, type SessionRecord } from "../contracts/types.js";
 import { HarnessCliError } from "../errors.js";
 
 function nowIso(): string {
@@ -36,6 +36,7 @@ export class SessionStore {
     const fullRecord: SessionRecord = {
       id,
       ...record,
+      elementMap: record.elementMap ?? existing?.elementMap,
       createdAt: existing?.createdAt ?? record.createdAt ?? nowIso(),
       updatedAt: nowIso()
     };
@@ -108,5 +109,56 @@ export class SessionStore {
       removed += 1;
     }
     return removed;
+  }
+
+  async saveElement(sessionId: string, elementId: string, reference: ElementReference): Promise<void> {
+    const session = await this.load(sessionId);
+    const elementMap = {
+      ...(session.elementMap ?? {}),
+      [elementId]: reference
+    };
+    await this.save(sessionId, {
+      host: session.host,
+      port: session.port,
+      wsEndpoint: session.wsEndpoint,
+      targetId: session.targetId,
+      targetUrl: session.targetUrl,
+      targetTitle: session.targetTitle,
+      elementMap,
+      createdAt: session.createdAt
+    });
+  }
+
+  async loadElement(sessionId: string, elementId: string): Promise<ElementReference> {
+    const session = await this.load(sessionId);
+    const reference = session.elementMap?.[elementId];
+    const queryHint =
+      sessionId === "default"
+        ? "harness-electron query --text \"...\""
+        : `harness-electron query --session ${sessionId} --text "..."`;
+    if (!reference) {
+      throw new HarnessCliError("INVALID_INPUT", `Element "${elementId}" not found in session "${sessionId}"`, false, [
+        queryHint,
+        `harness-electron schema`
+      ]);
+    }
+    return reference;
+  }
+
+  async nextElementId(sessionId: string): Promise<string> {
+    const session = await this.load(sessionId);
+    const keys = Object.keys(session.elementMap ?? {});
+    let max = 0;
+    for (const key of keys) {
+      const match = key.match(/^e(\d+)$/);
+      if (!match) {
+        continue;
+      }
+      const n = Number.parseInt(match[1], 10);
+      if (Number.isInteger(n) && n > max) {
+        max = n;
+      }
+    }
+    return `e${max + 1}`;
   }
 }

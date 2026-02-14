@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { Command } from "commander";
+import { Command, CommanderError } from "commander";
 import { connectCommand } from "./commands/connect.js";
 import { domCommand } from "./commands/dom.js";
 import {
@@ -12,16 +12,34 @@ import {
 import { assertCommand } from "./commands/assert.js";
 import { capabilitiesCommand } from "./commands/capabilities.js";
 import { disconnectCommand, listSessionsCommand, pruneSessionsCommand } from "./commands/sessions.js";
+import { queryCommand } from "./commands/query.js";
+import { schemaCommand } from "./commands/schema.js";
+import { versionCommand } from "./commands/version.js";
 import { assertKindSchema } from "./contracts/types.js";
 import { HarnessCliError, normalizeError, toExitCode } from "./errors.js";
 import { fail, ok, printJson } from "./io.js";
-import { selectorFromOptions, addSelectorOptions, selectorFromOptionsOptional } from "./selector.js";
+import {
+  addDiscoverySelectorOptions,
+  addSelectorOptions,
+  hasSelectorInput,
+  targetFromOptions
+} from "./selector.js";
 import { SessionStore } from "./session/store.js";
 
 const program = new Command();
 const store = new SessionStore(process.cwd());
 
-program.name("harness-electron").description("@harnessgg/electron");
+program
+  .name("harness-electron")
+  .description("@harnessgg/electron")
+  .allowExcessArguments(true)
+  .configureOutput({
+    writeOut: (text) => process.stdout.write(text),
+    writeErr: () => {
+      // Parse errors are emitted as JSON envelopes below.
+    }
+  })
+  .exitOverride();
 
 program
   .command("connect")
@@ -62,6 +80,28 @@ program
     });
   });
 
+const queryCmd = addDiscoverySelectorOptions(
+  program
+    .command("query")
+    .option("--session <id>", "session id", "default")
+    .option("--limit <number>", "max matches to return", "10")
+    .option("--visible-only", "only return visible matches", false)
+);
+queryCmd.action(async (options) => {
+  await run("query", options.session, async () => {
+    const target = targetFromOptions(options, { requireTarget: true });
+    if (!target.selector || target.elementId) {
+      throw new HarnessCliError("INVALID_SELECTOR", "query requires one selector flag", false);
+    }
+    return queryCommand(store, {
+      session: options.session,
+      selector: target.selector,
+      limit: parsePositiveInt(options.limit, "limit"),
+      visibleOnly: options.visibleOnly
+    });
+  });
+});
+
 const typeCmd = addSelectorOptions(
   program
     .command("type")
@@ -72,9 +112,10 @@ const typeCmd = addSelectorOptions(
 );
 typeCmd.action(async (options) => {
   await run("type", options.session, async () => {
+    const target = targetFromOptions(options, { requireTarget: true });
     return typeCommand(store, {
       session: options.session,
-      selector: selectorFromOptions(options),
+      ...target,
       text: parseStringValue(options.value, "value"),
       clear: options.clear,
       timeout: parsePositiveInt(options.timeout, "timeout")
@@ -87,9 +128,10 @@ const clickCmd = addSelectorOptions(
 );
 clickCmd.action(async (options) => {
   await run("click", options.session, async () => {
+    const target = targetFromOptions(options, { requireTarget: true });
     return clickCommand(store, {
       session: options.session,
-      selector: selectorFromOptions(options),
+      ...target,
       timeout: parsePositiveInt(options.timeout, "timeout")
     });
   });
@@ -109,10 +151,18 @@ waitCmd.action(async (options) => {
     if (!["visible", "hidden", "url", "text"].includes(mode)) {
       throw new HarnessCliError("INVALID_INPUT", "--for must be visible|hidden|url|text", false);
     }
+    const target = targetFromOptions(options, { requireTarget: mode !== "url" });
+    if (mode === "url" && (target.selector || target.elementId)) {
+      throw new HarnessCliError(
+        "INVALID_INPUT",
+        "--for url does not accept selector flags or --element-id",
+        false
+      );
+    }
     return waitCommand(store, {
       session: options.session,
       mode,
-      selector: mode === "url" ? undefined : selectorFromOptions(options),
+      ...target,
       value: options.value ? parseStringValue(options.value, "value") : undefined,
       timeout: parsePositiveInt(options.timeout, "timeout")
     });
@@ -129,16 +179,20 @@ const screenshotCmd = addSelectorOptions(
 );
 screenshotCmd.action(async (options) => {
   await run("screenshot", options.session, async () => {
-    const selector = selectorFromOptionsOptional(options);
-    const hasSelector = Boolean(selector.css || selector.xpath || selector.text || selector.role || selector.testid);
-    if (options.fullPage && hasSelector) {
-      throw new HarnessCliError("INVALID_INPUT", "--full-page cannot be combined with selector flags", false);
+    const target = targetFromOptions(options, { requireTarget: false });
+    const hasTarget = Boolean(target.elementId || (target.selector && hasSelectorInput(target.selector)));
+    if (options.fullPage && hasTarget) {
+      throw new HarnessCliError(
+        "INVALID_INPUT",
+        "--full-page cannot be combined with selector flags or --element-id",
+        false
+      );
     }
     return screenshotCommand(store, {
       session: options.session,
       path: options.path,
       fullPage: options.fullPage,
-      selector: hasSelector ? selector : undefined,
+      ...target,
       timeout: parsePositiveInt(options.timeout, "timeout")
     });
   });
@@ -171,10 +225,18 @@ assertCmd.action(async (options) => {
     if (!parsedKind.success) {
       throw new HarnessCliError("INVALID_INPUT", "--kind must be exists|visible|text|url", false);
     }
+    const target = targetFromOptions(options, { requireTarget: parsedKind.data !== "url" });
+    if (parsedKind.data === "url" && (target.selector || target.elementId)) {
+      throw new HarnessCliError(
+        "INVALID_INPUT",
+        "--kind url does not accept selector flags or --element-id",
+        false
+      );
+    }
     return assertCommand(store, {
       session: options.session,
       kind: parsedKind.data,
-      selector: parsedKind.data === "url" ? undefined : selectorFromOptions(options),
+      ...target,
       expected: options.expected ? parseStringValue(options.expected, "expected") : undefined,
       timeout: parsePositiveInt(options.timeout, "timeout")
     });
@@ -207,8 +269,19 @@ program.command("capabilities").action(async () => {
   await run("capabilities", "default", async () => capabilitiesCommand(store.getBaseDir()));
 });
 
+program.command("schema").action(async () => {
+  await run("schema", "default", async () => schemaCommand());
+});
+
+program.command("version").action(async () => {
+  await run("version", "default", async () => versionCommand());
+});
+
 program.parseAsync(process.argv).catch(async (error) => {
-  await emitFailure("unknown", "default", error);
+  if (error instanceof CommanderError && error.code === "commander.helpDisplayed") {
+    return;
+  }
+  await emitFailure(process.argv[2] ?? "unknown", "default", normalizeCommanderError(error));
 });
 
 async function run<T>(command: string, session: string, fn: () => Promise<T>): Promise<void> {
@@ -266,4 +339,20 @@ function normalizeTimeoutError(error: unknown): unknown {
     );
   }
   return error;
+}
+
+function normalizeCommanderError(error: unknown): unknown {
+  if (!(error instanceof CommanderError)) {
+    return error;
+  }
+  return new HarnessCliError(
+    "INVALID_INPUT",
+    error.message.replace(/^error:\s*/i, "").trim(),
+    false,
+    [
+      "harness-electron schema",
+      "harness-electron <command> --help"
+    ],
+    { source: error.code }
+  );
 }

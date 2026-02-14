@@ -61,20 +61,6 @@ export type ErrorEnvelope = {
 
 export type HarnessResult<T> = SuccessEnvelope<T> | ErrorEnvelope;
 
-export const sessionRecordSchema = z.object({
-  id: z.string(),
-  host: z.string(),
-  port: z.number().int().positive(),
-  wsEndpoint: z.string(),
-  targetId: z.string().optional(),
-  targetUrl: z.string().optional(),
-  targetTitle: z.string().optional(),
-  createdAt: z.string(),
-  updatedAt: z.string()
-});
-
-export type SessionRecord = z.infer<typeof sessionRecordSchema>;
-
 export const selectorInputSchema = z.object({
   css: z.string().optional(),
   xpath: z.string().optional(),
@@ -85,6 +71,30 @@ export const selectorInputSchema = z.object({
 });
 
 export type SelectorInput = z.infer<typeof selectorInputSchema>;
+
+export const elementReferenceSchema = z.object({
+  selector: selectorInputSchema,
+  index: z.number().int().min(0),
+  hint: z.string().optional(),
+  createdAt: z.string()
+});
+
+export type ElementReference = z.infer<typeof elementReferenceSchema>;
+
+export const sessionRecordSchema = z.object({
+  id: z.string(),
+  host: z.string(),
+  port: z.number().int().positive(),
+  wsEndpoint: z.string(),
+  targetId: z.string().optional(),
+  targetUrl: z.string().optional(),
+  targetTitle: z.string().optional(),
+  elementMap: z.record(z.string(), elementReferenceSchema).optional(),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+
+export type SessionRecord = z.infer<typeof sessionRecordSchema>;
 
 export const assertKindSchema = z.enum(["exists", "visible", "text", "url"]);
 export type AssertKind = z.infer<typeof assertKindSchema>;
@@ -97,7 +107,8 @@ export const capabilitySchema = z.object({
   assertions: z.array(assertKindSchema),
   defaults: z.object({
     timeoutMs: z.number().int().positive(),
-    sessionPath: z.string()
+    sessionPath: z.string(),
+    session: z.string()
   })
 });
 

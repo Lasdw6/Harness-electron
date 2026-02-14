@@ -1,39 +1,48 @@
 # Command Reference (Human)
 
-All commands return JSON on stdout.
+All commands emit one JSON object on stdout.
+
+Default flow uses one implicit session, so no `--session` flag is needed.
 
 ## connect
 
-Connect to Electron CDP and create/update a session.
+Connect to Electron CDP and persist target metadata.
 
 ```bash
-harness-electron connect --host 127.0.0.1 --port 9222
+harness-electron connect --port 9222
 ```
 
 Options:
 - `--host` (default `127.0.0.1`)
 - `--port` (required)
-- `--session` (default `default`)
-- `--window-title` optional target filter
-- `--url-contains` optional target filter
-
-Implementation detail (if you own Electron app startup code):
-
-```js
-app.commandLine.appendSwitch("remote-debugging-port", "9222");
-```
+- `--window-title` optional target title filter
+- `--url-contains` optional target URL filter
 
 ## dom
 
-Inspect the current renderer DOM.
+Inspect the active renderer DOM.
 
 ```bash
 harness-electron dom --format summary
 ```
 
 Options:
-- `--format` one of `summary`, `tree`, `html`
-- `--max-nodes` used by `tree` (default `300`)
+- `--format`: `summary`, `tree`, `html`
+- `--max-nodes`: used by `tree` (default `300`)
+
+## query
+
+Discover elements and persist stable `elementId` handles in session state.
+
+```bash
+harness-electron query --role button --name "Add Project"
+```
+
+Options:
+- selector flags (required): `--css`, `--xpath`, `--text`, `--role`, `--testid`
+- `--name` optional with `--role`
+- `--limit` max results (default `10`)
+- `--visible-only` return only visible matches
 
 ## type
 
@@ -41,14 +50,17 @@ Type into an input/control.
 
 ```bash
 harness-electron type --css "input[type=email]" --value "user@example.com"
+harness-electron type --element-id e2 --value "user@example.com"
 ```
 
 Options:
 - `--value` required typed text
-- `--clear` clear input first
+- `--clear` clear first
 - `--timeout` default `5000`
-- selector flags: `--css`, `--xpath`, `--text`, `--role`, `--testid`
-- `--name` optional when using `--role`
+- target options:
+  - selector flags (`--css|--xpath|--text|--role|--testid`, optional `--name`)
+  - or `--element-id <id>` from `query`
+  - disambiguation: `--index <n>` or `--strict-single`
 
 ## click
 
@@ -56,36 +68,37 @@ Click a matched element.
 
 ```bash
 harness-electron click --role button --name "Sign in"
+harness-electron click --element-id e1
 ```
 
 ## wait
 
-Wait for UI state.
+Wait for state transitions.
 
 ```bash
 harness-electron wait --for visible --css ".toast.success"
 harness-electron wait --for url --value "/dashboard"
 ```
 
-Options:
-- `--for`: `visible`, `hidden`, `url`, `text`
-- `--value`: required for `url` and `text`
-- selector required for `visible`, `hidden`, `text`
+Rules:
+- `--for url`: requires `--value`, does not accept selector flags or `--element-id`
+- `--for text`: requires target + `--value`
+- `--for visible|hidden`: requires target
 
 ## screenshot
 
-Capture the current page.
+Capture viewport, full page, or one element.
 
 ```bash
 harness-electron screenshot --path "./artifacts/state.png" --full-page
 harness-electron screenshot --path "./artifacts/debug-map.png" --text "Debug Map"
-harness-electron screenshot --path "./artifacts/debug-map-button.png" --role button --name "Show"
+harness-electron screenshot --path "./artifacts/show-button.png" --element-id e3
 ```
 
 Options:
-- `--timeout` capture timeout in ms (default `15000`)
-- optional selector flags to capture only one element: `--css`, `--xpath`, `--text`, `--role`, `--testid`
-- `--full-page` captures whole page and cannot be combined with selector flags
+- `--timeout` screenshot timeout in ms (default `15000`)
+- target options: selector flags or `--element-id`
+- `--full-page` cannot be combined with selector flags or `--element-id`
 
 ## evaluate
 
@@ -97,23 +110,23 @@ harness-electron evaluate --script "document.title"
 
 ## assert
 
-Run assertion checks.
+Run assertions.
 
 ```bash
 harness-electron assert --kind visible --css "#dashboard"
-harness-electron assert --kind text --css ".status" --expected "Connected"
+harness-electron assert --kind text --element-id e4 --expected "Connected"
 harness-electron assert --kind url --expected "/dashboard"
 ```
 
 Kinds:
 - `exists`
 - `visible`
-- `text` (requires `--expected`)
-- `url` (requires `--expected`, selector not required)
+- `text` (requires target + `--expected`)
+- `url` (requires `--expected`, no target)
 
 ## disconnect
 
-Remove local session.
+Remove one local session.
 
 ```bash
 harness-electron disconnect
@@ -121,18 +134,36 @@ harness-electron disconnect
 
 ## sessions
 
-List or prune session files.
+List or prune sessions.
 
 ```bash
 harness-electron sessions list
 harness-electron sessions prune
-harness-electron sessions prune --session alt-app
 ```
+
+Advanced override:
+- pass `--session <id>` only when you intentionally run multiple concurrent sessions.
 
 ## capabilities
 
-Machine-discover supported command/features.
+High-level feature discovery.
 
 ```bash
 harness-electron capabilities
+```
+
+## schema
+
+Machine-readable command + flag schema for LLM tool planning.
+
+```bash
+harness-electron schema
+```
+
+## version
+
+Return package metadata and package version as JSON.
+
+```bash
+harness-electron version
 ```

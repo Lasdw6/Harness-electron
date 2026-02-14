@@ -9,6 +9,7 @@
     "commands": [
       "connect",
       "dom",
+      "query",
       "type",
       "click",
       "wait",
@@ -18,13 +19,16 @@
       "disconnect",
       "sessions list",
       "sessions prune",
-      "capabilities"
+      "capabilities",
+      "schema",
+      "version"
     ],
-    "selectors": ["css", "xpath", "text", "role", "testid"],
+    "selectors": ["css", "xpath", "text", "role", "testid", "element-id"],
     "assertions": ["exists", "visible", "text", "url"],
     "defaults": {
       "timeoutMs": 5000,
-      "sessionPath": ".harness-electron/sessions"
+      "sessionPath": ".harness-electron/sessions",
+      "session": "default"
     }
   }
 }

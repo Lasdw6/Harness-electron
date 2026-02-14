@@ -2,10 +2,14 @@ import path from "node:path";
 import fs from "fs-extra";
 import type { Browser, Locator, Page } from "playwright-core";
 import { chromium } from "playwright-core";
-import type { SelectorInput, SessionRecord } from "../contracts/types.js";
+import type { ElementReference, SelectorInput, SessionRecord } from "../contracts/types.js";
 import { HarnessCliError } from "../errors.js";
 
 export async function attachBrowser(session: SessionRecord): Promise<Browser> {
+  const reconnectHint =
+    session.id === "default"
+      ? `harness-electron connect --host ${session.host} --port ${session.port}`
+      : `harness-electron connect --host ${session.host} --port ${session.port} --session ${session.id}`;
   try {
     return await chromium.connectOverCDP(session.wsEndpoint);
   } catch (error) {
@@ -15,7 +19,7 @@ export async function attachBrowser(session: SessionRecord): Promise<Browser> {
         error instanceof Error ? error.message : "unknown error"
       }`,
       true,
-      [`harness-electron connect --host ${session.host} --port ${session.port} --session ${session.id}`]
+      [reconnectHint]
     );
   }
 }
@@ -132,4 +136,64 @@ export async function safeElementScreenshot(
   await fs.ensureDir(path.dirname(screenshotPath));
   await locator.first().waitFor({ state: "visible", timeout });
   await locator.first().screenshot({ path: screenshotPath, timeout });
+}
+
+export function referenceToLocator(page: Page, reference: ElementReference): Locator {
+  return selectorToLocator(page, reference.selector).nth(reference.index);
+}
+
+export async function queryElements(
+  page: Page,
+  selector: SelectorInput,
+  limit: number
+): Promise<
+  Array<{
+    index: number;
+    tag: string;
+    text: string;
+    role: string | null;
+    ariaLabel: string | null;
+    testId: string | null;
+    visible: boolean;
+  }>
+> {
+  const locator = selectorToLocator(page, selector);
+  const count = await locator.count();
+  const max = Math.min(count, limit);
+  const results: Array<{
+    index: number;
+    tag: string;
+    text: string;
+    role: string | null;
+    ariaLabel: string | null;
+    testId: string | null;
+    visible: boolean;
+  }> = [];
+
+  for (let i = 0; i < max; i += 1) {
+    const node = locator.nth(i);
+    const visible = await node.isVisible().catch(() => false);
+    const info = await node
+      .evaluate((el) => {
+        const tag = el.tagName.toLowerCase();
+        const text = (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 180);
+        const role = el.getAttribute("role");
+        const ariaLabel = el.getAttribute("aria-label");
+        const testId = el.getAttribute("data-testid");
+        return { tag, text, role, ariaLabel, testId };
+      })
+      .catch(() => ({ tag: "unknown", text: "", role: null, ariaLabel: null, testId: null }));
+
+    results.push({
+      index: i,
+      tag: info.tag,
+      text: info.text,
+      role: info.role,
+      ariaLabel: info.ariaLabel,
+      testId: info.testId,
+      visible
+    });
+  }
+
+  return results;
 }

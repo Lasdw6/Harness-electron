@@ -1,36 +1,39 @@
 import type { SelectorInput } from "../contracts/types.js";
 import type { SessionStore } from "../session/store.js";
-import { safeElementScreenshot, safeScreenshot, selectorToLocator } from "../runtime/playwright.js";
+import { safeElementScreenshot, safeScreenshot } from "../runtime/playwright.js";
 import { HarnessCliError } from "../errors.js";
-import { withPage } from "./shared.js";
+import { resolveLocatorTarget, withPage } from "./shared.js";
 
-type TypeOptions = {
+type Targetable = {
+  selector?: SelectorInput;
+  elementId?: string;
+  index: number;
+  strictSingle: boolean;
+};
+
+type TypeOptions = Targetable & {
   session: string;
-  selector: SelectorInput;
   text: string;
   clear: boolean;
   timeout: number;
 };
 
-type ClickOptions = {
+type ClickOptions = Targetable & {
   session: string;
-  selector: SelectorInput;
   timeout: number;
 };
 
-type WaitOptions = {
+type WaitOptions = Targetable & {
   session: string;
   mode: "visible" | "hidden" | "url" | "text";
-  selector?: SelectorInput;
   value?: string;
   timeout: number;
 };
 
-type ScreenshotOptions = {
+type ScreenshotOptions = Targetable & {
   session: string;
   path: string;
   fullPage: boolean;
-  selector?: SelectorInput;
   timeout: number;
 };
 
@@ -42,22 +45,54 @@ type EvaluateOptions = {
 export async function typeCommand(store: SessionStore, options: TypeOptions) {
   const session = await store.load(options.session);
   return withPage(session, async (page) => {
-    const locator = selectorToLocator(page, options.selector);
-    await locator.first().waitFor({ state: "visible", timeout: options.timeout });
+    const resolved = await resolveLocatorTarget({
+      store,
+      sessionId: options.session,
+      page,
+      selector: options.selector,
+      elementId: options.elementId,
+      index: options.index,
+      strictSingle: options.strictSingle,
+      timeout: options.timeout
+    });
+    await resolved.locator.waitFor({ state: "visible", timeout: options.timeout });
     if (options.clear) {
-      await locator.first().fill("");
+      await resolved.locator.fill("");
     }
-    await locator.first().fill(options.text, { timeout: options.timeout });
-    return { typed: true };
+    await resolved.locator.fill(options.text, { timeout: options.timeout });
+    return {
+      typed: true,
+      target: {
+        strategy: resolved.strategy,
+        index: resolved.index,
+        ...(resolved.matchCount !== undefined ? { matchCount: resolved.matchCount } : {})
+      }
+    };
   });
 }
 
 export async function clickCommand(store: SessionStore, options: ClickOptions) {
   const session = await store.load(options.session);
   return withPage(session, async (page) => {
-    const locator = selectorToLocator(page, options.selector);
-    await locator.first().click({ timeout: options.timeout });
-    return { clicked: true };
+    const resolved = await resolveLocatorTarget({
+      store,
+      sessionId: options.session,
+      page,
+      selector: options.selector,
+      elementId: options.elementId,
+      index: options.index,
+      strictSingle: options.strictSingle,
+      timeout: options.timeout
+    });
+    await resolved.locator.click({ timeout: options.timeout });
+    return {
+      clicked: true,
+      target: {
+        strategy: resolved.strategy,
+        index: resolved.index,
+        ...(resolved.matchCount !== undefined ? { matchCount: resolved.matchCount } : {})
+      }
+    };
   });
 }
 
@@ -72,17 +107,38 @@ export async function waitCommand(store: SessionStore, options: WaitOptions) {
       return { matched: page.url() };
     }
 
-    if (!options.selector) {
-      throw new HarnessCliError("INVALID_SELECTOR", "A selector is required for this wait mode", false);
-    }
-    const locator = selectorToLocator(page, options.selector).first();
+    const resolved = await resolveLocatorTarget({
+      store,
+      sessionId: options.session,
+      page,
+      selector: options.selector,
+      elementId: options.elementId,
+      index: options.index,
+      strictSingle: options.strictSingle,
+      timeout: options.timeout
+    });
+    const locator = resolved.locator;
     if (options.mode === "visible") {
       await locator.waitFor({ state: "visible", timeout: options.timeout });
-      return { visible: true };
+      return {
+        visible: true,
+        target: {
+          strategy: resolved.strategy,
+          index: resolved.index,
+          ...(resolved.matchCount !== undefined ? { matchCount: resolved.matchCount } : {})
+        }
+      };
     }
     if (options.mode === "hidden") {
       await locator.waitFor({ state: "hidden", timeout: options.timeout });
-      return { hidden: true };
+      return {
+        hidden: true,
+        target: {
+          strategy: resolved.strategy,
+          index: resolved.index,
+          ...(resolved.matchCount !== undefined ? { matchCount: resolved.matchCount } : {})
+        }
+      };
     }
     if (!options.value) {
       throw new HarnessCliError("INVALID_INPUT", "--value is required for --for text", false);
@@ -91,7 +147,14 @@ export async function waitCommand(store: SessionStore, options: WaitOptions) {
     while (Date.now() < deadline) {
       const text = await locator.textContent();
       if ((text ?? "").includes(options.value)) {
-        return { textContains: options.value };
+        return {
+          textContains: options.value,
+          target: {
+            strategy: resolved.strategy,
+            index: resolved.index,
+            ...(resolved.matchCount !== undefined ? { matchCount: resolved.matchCount } : {})
+          }
+        };
       }
       await page.waitForTimeout(100);
     }
@@ -102,12 +165,37 @@ export async function waitCommand(store: SessionStore, options: WaitOptions) {
 export async function screenshotCommand(store: SessionStore, options: ScreenshotOptions) {
   const session = await store.load(options.session);
   return withPage(session, async (page) => {
-    if (options.selector) {
-      const locator = selectorToLocator(page, options.selector);
-      await safeElementScreenshot(locator, options.path, options.timeout);
-      return { path: options.path, scope: "element" };
+    if (options.selector || options.elementId) {
+      const resolved = await resolveLocatorTarget({
+        store,
+        sessionId: options.session,
+        page,
+        selector: options.selector,
+        elementId: options.elementId,
+        index: options.index,
+        strictSingle: options.strictSingle,
+        timeout: options.timeout
+      });
+      await withOperationTimeout(
+        () => safeElementScreenshot(resolved.locator, options.path, options.timeout),
+        options.timeout,
+        "element-screenshot"
+      );
+      return {
+        path: options.path,
+        scope: "element",
+        target: {
+          strategy: resolved.strategy,
+          index: resolved.index,
+          ...(resolved.matchCount !== undefined ? { matchCount: resolved.matchCount } : {})
+        }
+      };
     }
-    await safeScreenshot(page, options.path, options.fullPage, options.timeout);
+    await withOperationTimeout(
+      () => safeScreenshot(page, options.path, options.fullPage, options.timeout),
+      options.timeout,
+      "page-screenshot"
+    );
     return { path: options.path, scope: options.fullPage ? "full-page" : "viewport" };
   });
 }
@@ -124,4 +212,41 @@ export async function evaluateCommand(store: SessionStore, options: EvaluateOpti
     );
     return { result };
   });
+}
+
+async function withOperationTimeout<T>(
+  operation: () => Promise<T>,
+  timeoutMs: number,
+  phase: string
+): Promise<T> {
+  let timeoutHandle: NodeJS.Timeout | undefined;
+  const pending = operation();
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(
+        new HarnessCliError(
+          "TIMEOUT",
+          `Operation timed out after ${timeoutMs}ms (${phase})`,
+          true,
+          ["Retry command with a larger --timeout"],
+          { phase, timeoutMs }
+        )
+      );
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([pending, timeout]);
+  } catch (error) {
+    if (error instanceof HarnessCliError && error.code === "TIMEOUT") {
+      pending.catch(() => {
+        // Ignore late rejections after timeout.
+      });
+    }
+    throw error;
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
 }

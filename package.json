@@ -1,6 +1,6 @@
 {
   "name": "@harnessgg/electron",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI harness for AI agents to test Electron apps",
   "main": "dist/cli.js",
   "scripts": {

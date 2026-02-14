@@ -7,6 +7,7 @@ export function capabilitiesCommand(sessionPath: string): CapabilitiesResponse {
     commands: [
       "connect",
       "dom",
+      "query",
       "type",
       "click",
       "wait",
@@ -16,13 +17,16 @@ export function capabilitiesCommand(sessionPath: string): CapabilitiesResponse {
       "disconnect",
       "sessions list",
       "sessions prune",
-      "capabilities"
+      "capabilities",
+      "schema",
+      "version"
     ],
-    selectors: ["css", "xpath", "text", "role", "testid"],
+    selectors: ["css", "xpath", "text", "role", "testid", "element-id"],
     assertions: ["exists", "visible", "text", "url"],
     defaults: {
       timeoutMs: 5000,
-      sessionPath
+      sessionPath,
+      session: "default"
     }
   };
 }

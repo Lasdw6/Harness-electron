@@ -18,6 +18,7 @@ This repository contains the `@harnessgg/electron` CLI package.
 - `npm run typecheck`: run strict type checks without emitting output.
 - `npm run dev -- <command>`: run CLI directly from source via `tsx`.
   - Example: `npm run dev -- capabilities`
+  - If command has flags, use an extra separator: `npm run dev -- click -- --text "Add Project"`
 - `node dist/cli.js <command>`: run built CLI.
 
 ## Coding Style & Naming Conventions

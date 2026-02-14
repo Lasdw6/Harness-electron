@@ -44,4 +44,45 @@ describe("SessionStore", () => {
     const removed = await store.prune();
     expect(removed).toBe(2);
   });
+
+  it("stores and resolves element references", async () => {
+    const temp = await fs.mkdtemp(path.join(os.tmpdir(), "harness-electron-"));
+    const store = new SessionStore(temp);
+    await store.save("default", {
+      host: "127.0.0.1",
+      port: 9222,
+      wsEndpoint: "ws://127.0.0.1:9222/devtools/browser/abc"
+    });
+
+    await store.saveElement("default", "e1", {
+      selector: { text: "Sign in" },
+      index: 0,
+      hint: "button:Sign in",
+      createdAt: new Date().toISOString()
+    });
+
+    const loaded = await store.loadElement("default", "e1");
+    expect(loaded.selector.text).toBe("Sign in");
+    expect(loaded.index).toBe(0);
+  });
+
+  it("increments element ids from saved map", async () => {
+    const temp = await fs.mkdtemp(path.join(os.tmpdir(), "harness-electron-"));
+    const store = new SessionStore(temp);
+    await store.save("default", {
+      host: "127.0.0.1",
+      port: 9222,
+      wsEndpoint: "ws://127.0.0.1:9222/devtools/browser/abc",
+      elementMap: {
+        e2: {
+          selector: { css: "#app" },
+          index: 0,
+          createdAt: new Date().toISOString()
+        }
+      }
+    });
+
+    const next = await store.nextElementId("default");
+    expect(next).toBe("e3");
+  });
 });

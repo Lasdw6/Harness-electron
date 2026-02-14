@@ -1,58 +1,63 @@
 # LLM Quickstart
 
-Use exact command sequence below for a login flow.
+Use this sequence for reliable Electron UI automation.
 
-## 0) Start Electron with remote debugging
-
-The harness connects over Chrome DevTools Protocol (CDP). Start the app with:
+## 0) Start app with CDP enabled
 
 ```bash
 electron . --remote-debugging-port=9222
 ```
 
-If your app already launches Electron internally, ensure a CDP port is enabled before running harness commands.
+If app startup is internal, make sure a CDP endpoint exists before `connect`.
 
-## 1) Connect
+## 1) Discover contract
+
+```bash
+harness-electron schema
+```
+
+## 2) Connect
 
 ```bash
 harness-electron connect --port 9222
 ```
 
-## 2) Inspect DOM
+## 3) Fast health check
 
 ```bash
 harness-electron dom --format summary
 ```
 
-If needed:
+## 4) Query stable targets
 
 ```bash
-harness-electron dom --format tree --max-nodes 500
+harness-electron query --role button --name "Sign in"
 ```
 
-## 3) Interact
+Take the returned `elementId` (for example `e1`).
+
+## 5) Interact
 
 ```bash
 harness-electron type --css "input[type=email]" --value "user@example.com"
 harness-electron type --css "input[type=password]" --value "my-secret"
-harness-electron click --role button --name "Sign in"
+harness-electron click --element-id e1
 ```
 
-## 4) Verify
+## 6) Verify
 
 ```bash
 harness-electron assert --kind url --expected "/dashboard"
 harness-electron assert --kind visible --css "#dashboard"
 ```
 
-## 5) Artifact
+## 7) Capture artifact
 
 ```bash
 harness-electron screenshot --path "./artifacts/dashboard.png"
-harness-electron screenshot --path "./artifacts/debug-map.png" --text "Debug Map"
 ```
 
-## 6) Cleanup
+## 8) Cleanup
 
 ```bash
 harness-electron disconnect
@@ -61,6 +66,6 @@ harness-electron disconnect
 ## Retry strategy
 
 1. On `CONNECT_FAILED`, rerun `connect` and verify port.
-2. On `TARGET_NOT_FOUND`, open/focus app window and reconnect.
-3. On `TIMEOUT`, retry once with larger `--timeout`.
-4. On `INVALID_SELECTOR`, run `dom --format tree` and choose a different selector.
+2. On `TARGET_NOT_FOUND`, open/focus a BrowserWindow and reconnect.
+3. On `TIMEOUT`, retry with larger `--timeout`.
+4. On `INVALID_SELECTOR`, run `dom --format tree` and retry with a different target strategy.
